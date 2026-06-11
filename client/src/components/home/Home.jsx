@@ -8,11 +8,11 @@ export default function Home() {
 
     useEffect(() => {
         (async () => {
-            const result = await gamesAPI.getAll();
-            setLatestGames(result.reverse().slice(0, 3));
+            const result = await gamesAPI.getLatest();
+            setLatestGames(result);
         })();
     }, []);
- 
+
     return (
         <section id="welcome-world">
 
@@ -24,7 +24,7 @@ export default function Home() {
 
             <div id="home-page">
                 <h1>Latest Games</h1>
-                
+
                 {latestGames.length > 0
                     ? latestGames.map(game => <LatestGame key={game._id} {...game} />)
                     : <p className="no-articles">No games yet</p>

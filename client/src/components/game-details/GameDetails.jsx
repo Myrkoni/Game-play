@@ -1,103 +1,111 @@
-import { useEffect, useState } from "react";
+
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { useGetOneGames } from "../../hooks/useGames";
+import { useForm } from "../../hooks/useForm";
+import { useGetAllComments, useCreateComment } from "../../hooks/useComments";
+import { useAuthContext } from "../../contexts/authContext";
 import gamesAPI from "../../api/games-api";
-import { useParams } from "react-router-dom";
-import commentsApi from "../../api/comments-api";
+
+const initialValues = {
+    comment: '',
+}
 
 export default function GameDetails() {
-  const [game, setGame] = useState({});
-  const [username, setUsername] = useState("");
-  const [comment, setComment] = useState("");
-  const { gameId } = useParams();
+    const navigate = useNavigate();
+    const { gameId } = useParams();
+    const [comments, dispatch] = useGetAllComments(gameId)
+    const createComment = useCreateComment();
+    const [game] = useGetOneGames(gameId);
+    const { isAuthenticated, email, userId } = useAuthContext();
 
-  useEffect(() => {
-    (async () => {
-      const result = await gamesAPI.getOne(gameId);
-      setGame(result);
-    })();
-  }, []);
+    const {
+        changeHandler,
+        submitHandler,
+        values,
+    } = useForm(initialValues, async ({ comment }) => {
+        try {
+            const newComment = await createComment(gameId, comment)
 
-  const commentSubmitHandler = async (e) => {
-    e.preventDefault();
+            // setComments(oldComments => [...oldComments, newComment]);
+            dispatch({ type: 'ADD_COMMENT', payload: { ...newComment, author: { email } } })
+        } catch (err) {
+            console.log(err.message);
+        }
+    });
 
-    const newComment = await commentsApi.create(gameId, username, comment);
+    const gameDeleteHandler = () => {
 
-    setGame((prevState) => ({
-      ...prevState,
-      comments: {
-        ...prevState.comments,
-        [newComment._id]: newComment,
-      },
-    }));
+        const isConfirmed = confirm(`Are you sure you want to delete ${game.title} game?`);
 
-    setUsername("");
-    setComment("");
-  };
+        if (!isAuthenticated) {
+            return
+        }
+        try {
+            gamesAPI.remove(gameId);
 
-  return (
-    <section id="game-details">
-      <h1>Game Details</h1>
-      <div className="info-section">
-        <div className="game-header">
-          <img className="game-img" src={game.imageUrl} />
-          <h1>{game.title}</h1>
-          <span className="levels">MaxLevel: {game.maxlevel}</span>
-          <p className="type">{game.category}</p>
-        </div>
+            navigate('/');
+        } catch (err) {
+            console.log(err.message);
+        }
 
-        <p className="text">{game.sumary}</p>
 
-        {/* <!-- Bonus ( for Guests and Users ) --> */}
-        <div className="details-comments">
-          <h2>Comments:</h2>
-          <ul>
-            {Object.keys(game.comments || {}).length > 0 ? (
-              Object.values(game.comments).map((comment) => (
-                <li key={comment._id} className="comment">
-                  <p>
-                    {comment.username}: {comment.text}
-                  </p>
-                </li>
-              ))
-            ) : (
-              <p className="no-comment">No comments.</p>
+    }
+
+    const isOwner = userId === game._ownerId;
+
+    return (
+        <section id="game-details">
+            <h1>Game Details</h1>
+            <div className="info-section">
+                <div className="game-header">
+                    <img className="game-img" src={game.imageUrl} />
+                    <h1>{game.title}</h1>
+                    <span className="levels">MaxLevel: {game.maxLevel}</span>
+                    <p className="type">{game.category}</p>
+                </div>
+
+                <p className="text">{game.summary}</p>
+
+                {/* <!-- Bonus ( for Guests and Users ) --> */}
+                <div className="details-comments">
+                    <h2>Comments:</h2>
+                    <ul>
+                        {comments.map(comment => (
+                            <li key={comment._id} className="comment">
+                                <p> {comment.author.email}: {comment.text}</p>
+                            </li>
+                        ))
+                        }
+                    </ul>
+                    {comments.length === 0 && <p className="no-comment">No comments.</p>}
+                </div>
+
+                {/* <!-- Edit/Delete buttons ( Only for creator of this game )  --> */}
+                {isOwner && (
+                    <div className="buttons">
+                        <Link to={`/games/${gameId}/edit`} className="button">Edit</Link>
+                        <a href="#" onClick={gameDeleteHandler} className="button">Delete</a>
+                    </div>
+                )}
+            </div>
+
+            {/* <!-- Bonus --> */}
+            {/* <!-- Add Comment ( Only for logged-in users, which is not creators of the current game ) --> */}
+            {isAuthenticated && (
+                <article className="create-comment">
+                    <label>Add new comment:</label>
+                    <form className="form" onSubmit={submitHandler}>
+                        <textarea
+                            name="comment"
+                            placeholder="Comment......"
+                            onChange={changeHandler}
+                            value={values.comment}
+                        ></textarea>
+
+                        <input className="btn submit" type="submit" value="Add Comment" />
+                    </form>
+                </article>
             )}
-          </ul>
-        </div>
-
-        {/* <!-- Edit/Delete buttons ( Only for creator of this game )  --> */}
-        <div className="buttons">
-          <a href="#" className="button">
-            Edit
-          </a>
-          <a href="#" className="button">
-            Delete
-          </a>
-        </div>
-      </div>
-
-      {/* <!-- Bonus --> */}
-      {/* <!-- Add Comment ( Only for logged-in users, which is not creators of the current game ) --> */}
-      <article className="create-comment">
-        <label>Add new comment:</label>
-        <form className="form" onSubmit={commentSubmitHandler}>
-          <input
-            type="text"
-            placeholder="Pesho"
-            name="username"
-            onChange={(e) => setUsername(e.target.value)}
-            value={username}
-          />
-
-          <textarea
-            name="comment"
-            placeholder="Comment......"
-            onChange={(e) => setComment(e.target.value)}
-            value={comment}
-          ></textarea>
-
-          <input className="btn submit" type="submit" value="Add Comment" />
-        </form>
-      </article>
-    </section>
-  );
+        </section>
+    );
 }
